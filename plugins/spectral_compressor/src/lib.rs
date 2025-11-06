@@ -282,7 +282,7 @@ impl SpectralCompressorParams {
 }
 
 impl Plugin for SpectralCompressor {
-    const NAME: &'static str = "Spectral Compressor";
+    const NAME: &'static str = "Destroyer Of Worlds";
     const VENDOR: &'static str = "Robbert van der Helm";
     const URL: &'static str = env!("CARGO_PKG_HOMEPAGE");
     const EMAIL: &'static str = "mail@robbertvanderhelm.nl";
