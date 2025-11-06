@@ -441,7 +441,7 @@ impl Plugin for SpectralCompressor {
             let mut sample_count = 0;
             for channel_samples in buffer.iter_samples() {
                 for sample in channel_samples {
-                    sum_squares += sample * sample;
+                    sum_squares += *sample * *sample;
                     sample_count += 1;
                 }
             }
@@ -527,7 +527,7 @@ impl Plugin for SpectralCompressor {
             let mut sample_count = 0;
             for channel_samples in buffer.iter_samples() {
                 for sample in channel_samples {
-                    sum_squares += sample * sample;
+                    sum_squares += *sample * *sample;
                     sample_count += 1;
                 }
             }
