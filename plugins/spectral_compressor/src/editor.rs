@@ -32,11 +32,11 @@ mod analyzer;
 mod mode_button;
 
 /// The entire GUI's width, in logical pixels.
-const EXPANDED_GUI_WIDTH: u32 = 1360;
-/// The width of the GUI's main part containing the controls.
-const COLLAPSED_GUI_WIDTH: u32 = 680;
-/// The entire GUI's height, in logical pixels.
-const GUI_HEIGHT: u32 = 530;
+const GUI_WIDTH: u32 = 680;
+/// The GUI's height when collapsed (analyzer hidden).
+const COLLAPSED_GUI_HEIGHT: u32 = 530;
+/// The entire GUI's height when expanded (analyzer visible).
+const EXPANDED_GUI_HEIGHT: u32 = 1060;
 // I couldn't get `LayoutType::Grid` to work as expected, so we'll fake a 4x4 grid with
 // hardcoded column widths
 const COLUMN_WIDTH: Units = Pixels(330.0);
@@ -73,8 +73,8 @@ impl Model for Data {}
 // Makes sense to also define this here, makes it a bit easier to keep track of
 pub(crate) fn default_state(editor_mode: Arc<AtomicCell<EditorMode>>) -> Arc<ViziaState> {
     ViziaState::new(move || match editor_mode.load() {
-        EditorMode::Collapsed => (COLLAPSED_GUI_WIDTH, GUI_HEIGHT),
-        EditorMode::AnalyzerVisible => (EXPANDED_GUI_WIDTH, GUI_HEIGHT),
+        EditorMode::Collapsed => (GUI_WIDTH, COLLAPSED_GUI_HEIGHT),
+        EditorMode::AnalyzerVisible => (GUI_WIDTH, EXPANDED_GUI_HEIGHT),
     })
 }
 
@@ -89,17 +89,18 @@ pub(crate) fn create(editor_state: Arc<ViziaState>, editor_data: Data) -> Option
 
         editor_data.clone().build(cx);
 
-        HStack::new(cx, |cx| {
+        VStack::new(cx, |cx| {
             main_column(cx);
 
             let analyzer_visible = Data::editor_mode
                 .map(|editor_mode| editor_mode.load() == EditorMode::AnalyzerVisible);
             Binding::new(cx, analyzer_visible, |cx, analyzer_visible| {
                 if analyzer_visible.get(cx) {
-                    analyzer_column(cx);
+                    analyzer_row(cx);
                 }
             });
-        });
+        })
+        .row_between(Pixels(0.0));
 
         ResizeHandle::new(cx);
     })
@@ -216,19 +217,20 @@ fn main_column(cx: &mut Context) {
         })
         .size(Auto);
     })
-    .width(Pixels(COLLAPSED_GUI_WIDTH as f32))
+    .width(Pixels(GUI_WIDTH as f32))
     .row_between(Pixels(10.0))
     .child_left(Stretch(1.0))
     .child_right(Stretch(1.0));
 }
 
-fn analyzer_column(cx: &mut Context) {
+fn analyzer_row(cx: &mut Context) {
     Analyzer::new(cx, Data::analyzer_data, Data::sample_rate)
-        // These arbitrary 12 pixels are to align with the analyzer toggle botton
-        .space(Pixels(12.0))
-        .bottom(Pixels(12.0))
-        .left(Pixels(2.0))
-        .top(Pixels(12.0));
+        .width(Pixels(GUI_WIDTH as f32))
+        .height(Pixels(500.0))
+        .left(Pixels(10.0))
+        .right(Pixels(10.0))
+        .top(Pixels(10.0))
+        .bottom(Pixels(10.0));
 }
 
 fn make_column(cx: &mut Context, title: &str, contents: impl FnOnce(&mut Context)) {
