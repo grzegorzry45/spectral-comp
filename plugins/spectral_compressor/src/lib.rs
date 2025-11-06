@@ -212,7 +212,7 @@ impl Default for GlobalParams {
             .with_unit(" dB")
             .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
             .with_string_to_value(formatters::s2v_f32_gain_to_db()),
-            auto_makeup_gain: BoolParam::new("Auto Makeup Gain", false),
+            auto_makeup_gain: BoolParam::new("Auto Makeup Gain", true),
             dry_wet_ratio: FloatParam::new("Mix", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_unit("%")
                 .with_smoother(SmoothingStyle::Linear(15.0))
@@ -539,15 +539,16 @@ impl Plugin for SpectralCompressor {
                 if output_rms > 0.0001 {
                     let target_compensation = input_rms / output_rms;
 
-                    // Smooth the compensation to avoid sudden jumps (0.001 = very slow smoothing)
-                    let smoothing_factor = 0.001;
+                    // Smooth the compensation to avoid sudden jumps (0.2 = fast smoothing)
+                    // At 512 samples/buffer and 48kHz, this adapts in about 50ms
+                    let smoothing_factor = 0.2;
                     self.auto_makeup_gain_compensation = self.auto_makeup_gain_compensation
                         * (1.0 - smoothing_factor)
                         + target_compensation * smoothing_factor;
 
-                    // Limit the compensation to reasonable values (between 0.1x and 10x)
+                    // Limit the compensation to reasonable values (between 0.5x and 4x)
                     self.auto_makeup_gain_compensation =
-                        self.auto_makeup_gain_compensation.clamp(0.1, 10.0);
+                        self.auto_makeup_gain_compensation.clamp(0.5, 4.0);
                 }
             }
         } else if !self.params.global.auto_makeup_gain.value() {
