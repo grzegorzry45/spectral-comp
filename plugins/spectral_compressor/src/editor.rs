@@ -25,11 +25,13 @@ use std::sync::{Arc, Mutex};
 
 use self::analyzer::Analyzer;
 use self::mode_button::EditorModeButton;
+use self::scale_button::ScaleButton;
 use crate::analyzer::AnalyzerData;
 use crate::{SpectralCompressor, SpectralCompressorParams};
 
 mod analyzer;
 mod mode_button;
+mod scale_button;
 
 /// The entire GUI's width, in logical pixels.
 const GUI_WIDTH: u32 = 680;
@@ -109,13 +111,33 @@ pub(crate) fn create(editor_state: Arc<ViziaState>, editor_data: Data) -> Option
 fn main_column(cx: &mut Context) {
     VStack::new(cx, |cx| {
         HStack::new(cx, |cx| {
-            EditorModeButton::new(cx, Data::editor_mode, "Show analyzer")
-                // Makes this align a bit nicer with the plugin name
-                .top(Pixels(2.0))
-                .left(Pixels(2.0));
+            HStack::new(cx, |cx| {
+                EditorModeButton::new(cx, Data::editor_mode, "Show analyzer")
+                    // Makes this align a bit nicer with the plugin name
+                    .top(Pixels(2.0))
+                    .left(Pixels(2.0));
+
+                // Scale preset buttons
+                Label::new(cx, "Scale:")
+                    .font_size(11.0)
+                    .top(Pixels(7.0))
+                    .left(Pixels(10.0));
+
+                ScaleButton::new(cx, 0.5, "50%")
+                    .top(Pixels(2.0))
+                    .left(Pixels(5.0));
+                ScaleButton::new(cx, 1.0, "100%")
+                    .top(Pixels(2.0))
+                    .left(Pixels(2.0));
+                ScaleButton::new(cx, 2.0, "200%")
+                    .top(Pixels(2.0))
+                    .left(Pixels(2.0));
+            })
+            .size(Auto)
+            .col_between(Pixels(0.0));
 
             HStack::new(cx, |cx| {
-                Label::new(cx, "Spectral Compressor")
+                Label::new(cx, "Destroyer Of Worlds")
                     .font_family(vec![FamilyOwned::Name(String::from(assets::NOTO_SANS))])
                     .font_weight(FontWeightKeyword::Thin)
                     .font_size(30.0)
