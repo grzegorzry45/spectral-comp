@@ -81,6 +81,10 @@ pub struct SpectralCompressor {
     /// The output for the analyzer data computed in `CompressorBank` while the editor is open. This
     /// can be cloned and moved into the editor.
     analyzer_output_data: Arc<Mutex<triple_buffer::Output<AnalyzerData>>>,
+
+    /// Smoothed auto makeup gain compensation in linear gain. This is updated based on the
+    /// difference between input and output levels when auto makeup is enabled.
+    auto_makeup_gain_compensation: f32,
 }
 
 /// An FFT plan for a specific window size, all of which will be precomputed during initilaization.
@@ -124,10 +128,9 @@ pub struct GlobalParams {
     /// then this acts as an offset on top of that. This is stored as linear gain.
     #[id = "output"]
     pub output_gain: FloatParam,
-    // TODO: Bring this back, and with values that make more sense
-    // /// Try to automatically compensate for gain differences with different input gain, threshold, and ratio values.
-    // #[id = "auto_makeup"]
-    // auto_makeup_gain: BoolParam,
+    /// Try to automatically compensate for gain differences with different input gain, threshold, and ratio values.
+    #[id = "auto_makeup"]
+    pub auto_makeup_gain: BoolParam,
     /// How much of the dry signal to mix in with the processed signal. The mixing is done after
     /// applying the output gain. In other words, the dry signal is not gained in any way.
     #[id = "dry_wet"]
@@ -186,6 +189,8 @@ impl Default for SpectralCompressor {
             complex_fft_buffer: Vec::with_capacity(MAX_WINDOW_SIZE / 2 + 1),
 
             analyzer_output_data: Arc::new(Mutex::new(analyzer_output_data)),
+
+            auto_makeup_gain_compensation: 1.0,
         }
     }
 }
@@ -207,7 +212,7 @@ impl Default for GlobalParams {
             .with_unit(" dB")
             .with_value_to_string(formatters::v2s_f32_gain_to_db(2))
             .with_string_to_value(formatters::s2v_f32_gain_to_db()),
-            // auto_makeup_gain: BoolParam::new("Auto Makeup Gain", true),
+            auto_makeup_gain: BoolParam::new("Auto Makeup Gain", false),
             dry_wet_ratio: FloatParam::new("Mix", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_unit("%")
                 .with_smoother(SmoothingStyle::Linear(15.0))
@@ -429,8 +434,32 @@ impl Plugin for SpectralCompressor {
         // threshold option. When sidechaining is enabled this is used to gain up the sidechain
         // signal instead.
         let input_gain = gain_compensation.sqrt();
-        let output_gain = self.params.global.output_gain.value() * gain_compensation.sqrt();
-        // TODO: Auto makeup gain
+
+        // Calculate input RMS for auto makeup gain
+        let input_rms = if self.params.global.auto_makeup_gain.value() {
+            let mut sum_squares = 0.0f32;
+            let mut sample_count = 0;
+            for channel_samples in buffer.iter_samples() {
+                for sample in channel_samples {
+                    sum_squares += sample * sample;
+                    sample_count += 1;
+                }
+            }
+            if sample_count > 0 {
+                (sum_squares / sample_count as f32).sqrt()
+            } else {
+                0.0
+            }
+        } else {
+            0.0
+        };
+
+        let mut output_gain = self.params.global.output_gain.value() * gain_compensation.sqrt();
+
+        // Apply auto makeup gain compensation if enabled
+        if self.params.global.auto_makeup_gain.value() && input_rms > 0.0001 {
+            output_gain *= self.auto_makeup_gain_compensation;
+        }
 
         // This is mixed in later with latency compensation applied
         self.dry_wet_mixer.write_dry(buffer);
@@ -490,6 +519,40 @@ impl Plugin for SpectralCompressor {
                     },
                 )
             }
+        }
+
+        // Update auto makeup gain compensation based on output RMS
+        if self.params.global.auto_makeup_gain.value() && input_rms > 0.0001 {
+            let mut sum_squares = 0.0f32;
+            let mut sample_count = 0;
+            for channel_samples in buffer.iter_samples() {
+                for sample in channel_samples {
+                    sum_squares += sample * sample;
+                    sample_count += 1;
+                }
+            }
+
+            if sample_count > 0 {
+                let output_rms = (sum_squares / sample_count as f32).sqrt();
+
+                // Calculate the ratio between input and output
+                if output_rms > 0.0001 {
+                    let target_compensation = input_rms / output_rms;
+
+                    // Smooth the compensation to avoid sudden jumps (0.001 = very slow smoothing)
+                    let smoothing_factor = 0.001;
+                    self.auto_makeup_gain_compensation = self.auto_makeup_gain_compensation
+                        * (1.0 - smoothing_factor)
+                        + target_compensation * smoothing_factor;
+
+                    // Limit the compensation to reasonable values (between 0.1x and 10x)
+                    self.auto_makeup_gain_compensation =
+                        self.auto_makeup_gain_compensation.clamp(0.1, 10.0);
+                }
+            }
+        } else if !self.params.global.auto_makeup_gain.value() {
+            // Reset to 1.0 when auto makeup is disabled
+            self.auto_makeup_gain_compensation = 1.0;
         }
 
         self.dry_wet_mixer.mix_in_dry(
