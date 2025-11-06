@@ -103,8 +103,6 @@ pub(crate) fn create(editor_state: Arc<ViziaState>, editor_data: Data) -> Option
             });
         })
         .row_between(Pixels(0.0));
-
-        ResizeHandle::new(cx);
     })
 }
 
